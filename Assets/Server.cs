@@ -33,7 +33,7 @@ public class Server : MonoBehaviour, ILossHandler
     void Start()
     {
         _builder  = new StringBuilder(1024, 1024);
-        _detector = new LossDetector(this);
+        _detector = new LossDetector(this, 1, 256);
 
         var address = new Address();
         address.SetHost(Ip);
@@ -115,6 +115,8 @@ public class Server : MonoBehaviour, ILossHandler
                     }
             }
         }
+        
+        _detector.ExecuteLostPackets();
     }
 
     void FixedUpdate()

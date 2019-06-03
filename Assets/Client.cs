@@ -29,7 +29,7 @@ public class Client : MonoBehaviour, ILossHandler
     void Start()
     {
         _builder  = new StringBuilder(1024, 1024);
-        _detector = new LossDetector(this);
+        _detector = new LossDetector(this, 1, 256);
 
         _host.Create();
         var address = new Address();
@@ -124,6 +124,8 @@ public class Client : MonoBehaviour, ILossHandler
                     break;
             }
         }
+        
+        _detector.ExecuteLostPackets();
     }
 
     private void FixedUpdate()

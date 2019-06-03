@@ -12,18 +12,27 @@ namespace LossDetection
 {
     public class LossDetector
     {
-        private readonly ILossHandler  _handler;
+        private readonly ILossHandler _handler;
 
-        private readonly SequenceValues[]         _sequences         = new SequenceValues[Config.MaxClientCount];
-        private readonly RingBuffer<PacketData>[] _packetDataBuffers = new RingBuffer<PacketData>[Config.MaxClientCount];
+        private readonly SequenceValues[]         _sequences;
+        private readonly RingBuffer<PacketData>[] _packetDataBuffers;
+        private readonly RingBuffer<LostData>     _lostPackets;
 
-        public LossDetector(ILossHandler handler)
+        private readonly ushort _maxPeerCount;
+
+        public LossDetector(ILossHandler handler, ushort maxPeerCount, ushort ackWindow)
         {
+            _maxPeerCount = maxPeerCount;
+
+            _sequences         = new SequenceValues[_maxPeerCount];
+            _packetDataBuffers = new RingBuffer<PacketData>[_maxPeerCount];
+            _lostPackets       = new RingBuffer<LostData>(_maxPeerCount * ackWindow, false);
+
             _handler = handler;
 
-            for (var i = 0; i < Config.MaxClientCount; i++)
+            for (var i = 0; i < _maxPeerCount; i++)
             {
-                _packetDataBuffers[i] = new RingBuffer<PacketData>(Config.AckWindow, false);
+                _packetDataBuffers[i] = new RingBuffer<PacketData>(ackWindow, false);
             }
         }
 
@@ -38,15 +47,12 @@ namespace LossDetection
             while (buffer.Count > 0)
             {
                 var data = buffer.Pop();
-                
-                _handler.OnPacketLost((ushort)peer.ID, data);
-                
-                if (data.Data != new IntPtr())
-                    Marshal.FreeHGlobal(data.Data);
+
+                _lostPackets.Push(new LostData{PeerId = (ushort)peer.ID, Data = data});
             }
         }
 
-    
+
         /// <returns>False if you exceeded ACK window and should drop connection.</returns>
         public bool EnqueueData(Peer peer, PacketData data)
         {
@@ -54,7 +60,7 @@ namespace LossDetection
             {
                 return false;
             }
-        
+
             _packetDataBuffers[peer.ID].Push(data);
             return true;
         }
@@ -87,7 +93,7 @@ namespace LossDetection
             if (SequenceFirstIsGreater(peerSentId, lastReceivedId))
             {
                 lastReceivedId = peerSentId;
-            
+
                 if (distance >= 32)
                 {
                     lastBitmask = 0;
@@ -97,7 +103,7 @@ namespace LossDetection
                     lastBitmask <<= distance;
                     lastBitmask |=  (uint) (1 << distance - 1);
                 }
-            
+
                 lastValue.Bitmask    = lastBitmask;
                 lastValue.ReceivedId = lastReceivedId;
                 _sequences[peerId]   = lastValue;
@@ -106,8 +112,8 @@ namespace LossDetection
 
                 while (ring.Count > 0)
                 {
-                    var packetId    = ring[0];
-                    var packetState = GetPacketState(packetId.SequenceId, peerReceivedId, peerBitmask);
+                    var packetData    = ring[0];
+                    var packetState = GetPacketState(packetData.SequenceId, peerReceivedId, peerBitmask);
 
                     if (packetState == PacketState.Flying)
                         break;
@@ -118,15 +124,15 @@ namespace LossDetection
 
                             ring.Pop();
 
-                            if (packetId.Data != new IntPtr())
-                                Marshal.FreeHGlobal(packetId.Data);
+                            if (packetData.Data != new IntPtr())
+                                Marshal.FreeHGlobal(packetData.Data);
 
                             break;
                         case PacketState.ProbablyLost:
 
                             ring.Pop();
 
-                            _handler.OnPacketLost(peerId, packetId);
+                            _lostPackets.Push(new LostData{PeerId = peerId, Data = packetData});
 
 #if LOSS_DETECTOR_DEBUG
                             var str = "";
@@ -134,12 +140,10 @@ namespace LossDetection
                             {
                                 str += (peerBitmask & (1 << j)) == 0 ? '0' : '1';
                             }
+
                             Logger.I.Log(this, $"{peerReceivedId} {str}");
-                            Logger.I.Log(this, $"Lost Seq#: {packetId.SequenceId} for Peer#: {peerId} using ACK data:");
+                            Logger.I.Log(this, $"Lost Seq#: {packetData.SequenceId} for Peer#: {peerId} using ACK data:");
 #endif
-                        
-                            if (packetId.Data != new IntPtr())
-                                Marshal.FreeHGlobal(packetId.Data);
 
                             break;
                     }
@@ -149,6 +153,18 @@ namespace LossDetection
             }
 
             return false;
+        }
+
+        public void ExecuteLostPackets()
+        {
+            while (_lostPackets.Count>0)
+            {
+                var lost = _lostPackets.Pop();
+                _handler.OnPacketLost(lost.PeerId, lost.Data);
+                
+                if(lost.Data.Data!=new IntPtr())
+                    Marshal.FreeHGlobal(lost.Data.Data);
+            }
         }
 
         public void ClearHeader(BitBuffer data)
@@ -161,16 +177,16 @@ namespace LossDetection
 #if LOSS_DETECTOR_DEBUG
         public void GetDebugString(StringBuilder builder)
         {
-            for (ushort i = 0; i < Config.MaxClientCount; i++)
+            for (ushort i = 0; i < _maxPeerCount; i++)
             {
                 GetDebugString(i, builder);
             }
         }
-    
+
         public void GetDebugString(ushort peerId, StringBuilder builder)
         {
             var seq = _sequences[peerId];
-            
+
             builder.Append($"{seq.SentId:00000} {seq.ReceivedId:00000} {_packetDataBuffers[peerId].Count:000} \n");
             for (int j = 0; j < 32; j++)
             {
@@ -211,8 +227,8 @@ namespace LossDetection
 
         private ushort SequenceDistance(ushort v1, ushort v2)
         {
-            var greater    = v1 >= v2 ? v1 : v2;
-            var smaller    = v1 >= v2 ? v2 : v1;
+            var greater  = v1 >= v2 ? v1 : v2;
+            var smaller  = v1 >= v2 ? v2 : v1;
             var distance = (ushort) (greater - smaller);
             if (distance > 32768)
             {
@@ -227,6 +243,12 @@ namespace LossDetection
             public ushort SentId;
             public ushort ReceivedId;
             public uint   Bitmask;
+        }
+        
+        private struct LostData
+        {
+            public ushort     PeerId;
+            public PacketData Data;
         }
 
         private enum PacketState
