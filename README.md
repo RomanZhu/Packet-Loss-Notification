@@ -1,4 +1,5 @@
 
+
 # Packet Loss Notification
 
 ## Features
@@ -30,12 +31,17 @@ The workflow is like that:
 - - Call `AddHeaderForPeerId`
 - - Write actual payload to BitBuffer
 - - Copy BitBuffer's content to allocated memory 
+- - Clear BitBuffer
 - - Call `EnqueueData`
-- - Send packet to peer, clear BitBuffer
+- - - If result is TRUE
+- - - - Send packet to peer
+- - - If result is FALSE
+- - - - Disconnect that peer
 - Received packet from Peer:
 - - Get packet's content into BitBuffer
 - - Call `ReadHeaderOfPeerId` with it
-- - Read actual payload
+- - - If result is TRUE
+- - - - Read actual payload
 - Periodically:
 - - Call `ExecuteLostPackets`
 - On lost packet:
@@ -44,6 +50,8 @@ The workflow is like that:
 - - Read actual payload
 - Peer Disconnected:
 - - Call `RemovePeer`
+
+If packet is considered as *Lost* it means that it was *most likely* lost. When packet is considered as *Arrived*, then it is arrived for sure.
 
 `ILossHandler.OnPacketLost` will be called for each lost packet AND for each packet which was enqueued and still tracked when that peer got disconnected.
 
@@ -55,7 +63,7 @@ If `LOSS_DETECTOR_DEBUG` symbol is present, then all lost packet sequences will 
 - void *AddPeer*(`ushort peerId`) - Clears sequence number for that peerId.
 - void *RemovePeer*(`ushort peerId`) - Enqueues each tracked packet for that peerId as being lost. 
 - void *AddHeaderForPeerId*(`ushort peerId, BitBuffer data`) - Writes header information into BitBuffer for that peerId.
-- bool *ReadHeaderOfPeerId*(`ushort peerId, BitBuffer data`) - Reads header from BitBuffer and detects if any tracked packet is ACKed or NACKed. In case of ACK will free allocated memory. Returns True if sequenceId is greater than lastSequenceId for that peerId.
+- bool *ReadHeaderOfPeerId*(`ushort peerId, BitBuffer data`) - Reads header from BitBuffer and detects if any tracked packet is ACKed or NACKed. In the case of ACK detector will free allocated memory. Returns True if sequenceId is greater than lastSequenceId for that peerId.
 - bool *EnqueueData*(`ushort peerId, PacketData data`) - Tries to put data into tracked packet queue for that peer. Returns False if the queue is already full. Probably you have not received packets from another peer for too long and should disconnect him.
 - void *ExecuteLostPackets*() - Forwards all buffered lost packets to the handler and free their allocated memory. 
 - void *ClearHeader*(`BitBuffer data`) - Clears header from BitBuffer.
