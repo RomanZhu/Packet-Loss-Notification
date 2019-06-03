@@ -3,6 +3,7 @@ using System.Text;
 using Sources.Tools;
 #endif
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NetStack.Serialization;
 using RingBuffer;
@@ -48,6 +49,7 @@ namespace LossDetection
                 var data = buffer.Pop();
 
                 _lostPackets.Push(new LostData{PeerId = peerId, Data = data});
+                LogLostPacket(peerId, data.SequenceId, 0, 0);
             }
         }
 
@@ -133,16 +135,7 @@ namespace LossDetection
 
                             _lostPackets.Push(new LostData{PeerId = peerId, Data = packetData});
 
-#if LOSS_DETECTOR_DEBUG
-                            var str = "";
-                            for (int j = 0; j < 32; j++)
-                            {
-                                str += (peerBitmask & (1 << j)) == 0 ? '0' : '1';
-                            }
-
-                            Logger.I.Log(this, $"{peerReceivedId} {str}");
-                            Logger.I.Log(this, $"Lost Seq#: {packetData.SequenceId} for Peer#: {peerId} using ACK data:");
-#endif
+                            LogLostPacket(peerId, packetData.SequenceId, peerReceivedId, peerBitmask);
 
                             break;
                     }
@@ -235,6 +228,22 @@ namespace LossDetection
             }
 
             return distance;
+        }
+
+        [Conditional("LOSS_DETECTOR_DEBUG")]
+        private void LogLostPacket(ushort peerId, ushort packetSequenceId, ushort receivedId, uint receivedBitmask)
+        {
+#if LOSS_DETECTOR_DEBUG
+            
+            var str = "";
+            for (int j = 0; j < 32; j++)
+            {
+                str += (receivedBitmask & (1 << j)) == 0 ? '0' : '1';
+            }
+
+            Logger.I.Log(this, $"{receivedId} {str}");
+            Logger.I.Log(this, $"Lost Seq#: {packetSequenceId} for Peer#: {peerId} using ACK data:");
+#endif
         }
 
         private struct SequenceValues
