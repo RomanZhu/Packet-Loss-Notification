@@ -43,7 +43,7 @@ The workflow is like that:
 - - Call `ClearHeader`
 - - Read actual payload
 - Peer Disconnected:
-- - Call `RemovePeer` in helper
+- - Call `RemovePeer`
 
 `ILossHandler.OnPacketLost` will be called for each lost packet AND for each packet which was enqueued and still tracked when that peer got disconnected.
 
@@ -67,6 +67,7 @@ If `LOSS_DETECTOR_DEBUG` symbol is present, then those methods are available too
 ## Dependencies
 - Unity 2019.1
 - NetStack.Serialization
+
 *Helper itself is transport-agnostic, but example project uses ENet*
 - ENet CSharp 2.2.6 
 
