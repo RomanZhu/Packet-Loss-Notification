@@ -65,7 +65,7 @@ If `LOSS_DETECTOR_DEBUG` symbol is present, then all lost packet sequences will 
 - void *AddHeaderForPeerId*(`ushort peerId, BitBuffer data`) - Writes header information into BitBuffer for that peerId.
 - bool *ReadHeaderOfPeerId*(`ushort peerId, BitBuffer data`) - Reads header from BitBuffer and detects if any tracked packet is ACKed or NACKed. In the case of ACK detector will free allocated memory. Returns True if sequenceId is greater than lastSequenceId for that peerId.
 - bool *EnqueueData*(`ushort peerId, PacketData data`) - Tries to put data into tracked packet queue for that peer. Returns False if the queue is already full. Probably you have not received packets from another peer for too long and should disconnect him.
-- void *ExecuteLostPackets*() - Forwards all buffered lost packets to the handler and free their allocated memory. 
+- void *ExecuteLostPackets*() - Forwards all buffered lost packets to the handler and frees their allocated memory. 
 - void *ClearHeader*(`BitBuffer data`) - Clears header from BitBuffer.
 
 If `LOSS_DETECTOR_DEBUG` symbol is present, then those methods are available too:
