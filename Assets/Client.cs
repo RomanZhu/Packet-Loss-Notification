@@ -148,7 +148,7 @@ public class Client : MonoBehaviour, ILossHandler
 
                 _buffer.Clear();
 
-                var canSend = _detector.EnqueueData(ServerConnection, data);
+                var canSend = _detector.EnqueueData((ushort)ServerConnection.ID, data);
 
                 if (canSend)
                 {
@@ -165,13 +165,13 @@ public class Client : MonoBehaviour, ILossHandler
 
     private void OnDisconnected(Peer eventPeer)
     {
-        _detector.RemovePeer(eventPeer);
+        _detector.RemovePeer((ushort)eventPeer.ID);
         ServerConnection = new Peer();
     }
 
     private void OnConnected(Peer eventPeer)
     {
-        _detector.AddPeer(eventPeer);
+        _detector.AddPeer((ushort)eventPeer.ID);
         ServerConnection = eventPeer;
     }
 

@@ -4,7 +4,6 @@ using Sources.Tools;
 #endif
 using System;
 using System.Runtime.InteropServices;
-using ENet;
 using NetStack.Serialization;
 using RingBuffer;
 
@@ -36,32 +35,32 @@ namespace LossDetection
             }
         }
 
-        public void AddPeer(Peer peer)
+        public void AddPeer(ushort peerId)
         {
-            _sequences[peer.ID] = new SequenceValues();
+            _sequences[peerId] = new SequenceValues();
         }
 
-        public void RemovePeer(Peer peer)
+        public void RemovePeer(ushort peerId)
         {
-            var buffer = _packetDataBuffers[peer.ID];
+            var buffer = _packetDataBuffers[peerId];
             while (buffer.Count > 0)
             {
                 var data = buffer.Pop();
 
-                _lostPackets.Push(new LostData{PeerId = (ushort)peer.ID, Data = data});
+                _lostPackets.Push(new LostData{PeerId = peerId, Data = data});
             }
         }
 
 
         /// <returns>False if you exceeded ACK window and should drop connection.</returns>
-        public bool EnqueueData(Peer peer, PacketData data)
+        public bool EnqueueData(ushort peerId, PacketData data)
         {
-            if (_packetDataBuffers[peer.ID].IsFull)
+            if (_packetDataBuffers[peerId].IsFull)
             {
                 return false;
             }
 
-            _packetDataBuffers[peer.ID].Push(data);
+            _packetDataBuffers[peerId].Push(data);
             return true;
         }
 
